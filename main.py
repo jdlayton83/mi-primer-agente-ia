@@ -32,7 +32,7 @@ def generar_respuesta():
 def ejecutar_agente():
     print("🤖 Conectando con Gemini...")
 
-    # Usamos el modelo estándar y rápido (gemini-2.5-flash)
+    # Usamos el modelo estándar y rápido (gemini-3.8-flash)
     response = generar_respuesta()
 
     print("\nRespuesta del Agente:")
