@@ -10,10 +10,10 @@ El agente debe descubrir información publicada públicamente, contrastarla y ge
 
 ### Programación
 
-- Añadir una ejecución automática semanal a las 09:00 Europe/Madrid los sábados.
+- Añadir una ejecución automática semanal los martes a las 09:00 Europe/Madrid.
 - Permitir una ejecución manual adicional para probar el radar sin esperar al horario semanal.
-- La primera ejecución automática prevista es el sábado 21 de noviembre de 2026 a las 09:00 Europe/Madrid.
-- Usar el cron y la semántica de zona horaria disponibles en GitHub Actions. Si GitHub Actions no permite una zona horaria directamente, mantener la planificación en UTC y documentar la conversión necesaria.
+- La primera ejecución automática prevista es el martes 24 de noviembre de 2026 a las 09:00 Europe/Madrid.
+- Usar el campo `timezone` de `schedule` en GitHub Actions para conservar la hora local durante los cambios entre horario de invierno y verano.
 
 ### Fuentes
 

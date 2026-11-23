@@ -1,6 +1,10 @@
 import json
 import os
+import smtplib
+import ssl
 import xml.etree.ElementTree as ET
+from datetime import date
+from email.message import EmailMessage
 from html.parser import HTMLParser
 from ipaddress import ip_address
 from pathlib import Path
@@ -207,6 +211,77 @@ def _anadir_hallazgos_al_prompt(
     return "\n".join(lines)
 
 
+def _obtener_configuracion_smtp() -> tuple[str, int, str, str, str, str]:
+    required_names = (
+        "RADAR_SMTP_HOST",
+        "RADAR_SMTP_PORT",
+        "RADAR_SMTP_USER",
+        "RADAR_SMTP_PASSWORD",
+        "RADAR_SMTP_FROM",
+        "RADAR_SMTP_TO",
+    )
+    missing = [
+        name
+        for name in required_names
+        if not (os.getenv(name) or "").strip()
+    ]
+    if missing:
+        raise ValueError(
+            "Faltan secretos SMTP obligatorios: " + ", ".join(missing)
+        )
+
+    try:
+        port = int(os.environ["RADAR_SMTP_PORT"])
+    except ValueError:
+        raise ValueError("RADAR_SMTP_PORT debe ser un puerto numérico.") from None
+    if not 1 <= port <= 65_535:
+        raise ValueError("RADAR_SMTP_PORT debe estar entre 1 y 65535.")
+
+    return (
+        os.environ["RADAR_SMTP_HOST"].strip(),
+        port,
+        os.environ["RADAR_SMTP_USER"].strip(),
+        os.environ["RADAR_SMTP_PASSWORD"],
+        os.environ["RADAR_SMTP_FROM"].strip(),
+        os.environ["RADAR_SMTP_TO"].strip(),
+    )
+
+
+def enviar_resumen_por_correo(resumen: str) -> None:
+    host, port, username, password, sender, recipient = (
+        _obtener_configuracion_smtp()
+    )
+    message = EmailMessage()
+    message["Subject"] = (
+        f"Radar semanal de innovación - {date.today().isoformat()}"
+    )
+    message["From"] = sender
+    message["To"] = recipient
+    message.set_content(resumen)
+
+    try:
+        context = ssl.create_default_context()
+        if port == 465:
+            with smtplib.SMTP_SSL(
+                host, port, timeout=30, context=context
+            ) as server:
+                server.login(username, password)
+                server.send_message(message)
+        else:
+            with smtplib.SMTP(host, port, timeout=30) as server:
+                server.ehlo()
+                server.starttls(context=context)
+                server.ehlo()
+                server.login(username, password)
+                server.send_message(message)
+    except (OSError, smtplib.SMTPException, ValueError) as error:
+        raise RuntimeError(
+            f"No se pudo enviar el radar por SMTP ({type(error).__name__})."
+        ) from None
+
+    print("Correo del radar enviado correctamente.")
+
+
 def cargar_instruccion_sistema() -> str:
     skill_name = os.getenv("AGENT_SKILL")
     if not skill_name:
@@ -264,15 +339,21 @@ def ejecutar_agente():
         else "Hola, preséntate brevemente como un agente de IA autónomo listo para trabajar en producción."
     )
     if skill_name == "radar_innovacion":
+        _obtener_configuracion_smtp()
         prompt = _anadir_hallazgos_al_prompt(prompt, cargar_hallazgos_rss())
 
     system_instruction = cargar_instruccion_sistema()
     response = generar_respuesta(prompt, system_instruction)
+    response_text = response.text
 
     print("\nRespuesta del Agente:")
     print("-" * 40)
-    print(response.text)
+    print(response_text)
     print("-" * 40)
+    if skill_name == "radar_innovacion":
+        if not response_text:
+            raise ValueError("Gemini devolvió una respuesta vacía; no se enviará correo.")
+        enviar_resumen_por_correo(response_text)
 
 if __name__ == "__main__":
     ejecutar_agente()
